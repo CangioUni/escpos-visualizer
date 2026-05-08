@@ -13,10 +13,76 @@
             background: #2c2c2c; 
             font-family: 'Courier New', Courier, monospace; 
             display: flex; 
-            flex-direction: column;
-            align-items: center; 
-            padding: 20px; 
+            flex-direction: row;
+            padding: 0;
+            margin: 0;
             color: #ccc;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 300px;
+            background: #1e1e1e;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        #sidebar-header {
+            padding: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-bottom: 1px solid #444;
+            background: #2a2a2a;
+            position: sticky;
+            top: 0;
+        }
+
+        #sidebar-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .history-item:hover {
+            background: #2a2a2a;
+        }
+
+        .history-item.selected {
+            background: #3a3a3a;
+            border-left: 4px solid #4CAF50;
+            padding-left: 16px;
+        }
+
+        .history-title {
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .history-preview {
+            font-size: 0.8em;
+            color: #aaa;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-y: auto;
         }
 
         /* Controls Panel */
@@ -85,7 +151,15 @@
 </head>
 <body>
 
-    <div class="controls">
+    <div id="sidebar">
+        <div id="sidebar-header">Bill History</div>
+        <div id="sidebar-list">
+            <!-- History items will be injected here -->
+        </div>
+    </div>
+
+    <div id="main-content">
+        <div class="controls">
         <label>Zoom / Display Scale:</label>
         <input type="range" id="zoomRange" min="0.5" max="3.0" step="0.1" value="1.5">
         <span id="zoomVal">150%</span>
@@ -97,9 +171,10 @@
         </div>
     </div>
 
-    <div id="hex-log">
-        <strong>Last Raw Data (Hex):</strong>
-        <div id="hex-output">None</div>
+        <div id="hex-log">
+            <strong>Last Raw Data (Hex):</strong>
+            <div id="hex-output">None</div>
+        </div>
     </div>
 
     <script>
@@ -108,6 +183,9 @@
         const zoomVal = document.getElementById('zoomVal');
         const root = document.documentElement;
 
+        let billsHistory = [];
+        let currentSelectedId = null;
+
         // Handle Zoom Slider
         zoomRange.addEventListener('input', (e) => {
             const val = e.target.value;
@@ -115,7 +193,7 @@
             zoomVal.textContent = Math.round(val * 100) + '%';
         });
 
-        socket.on('new_bill', function(data) {
+        function renderBill(data) {
             const container = document.getElementById('bill-content');
             container.innerHTML = '';
             
@@ -136,6 +214,64 @@
             });
 
             document.getElementById('hex-output').innerText = data.raw;
+        }
+
+        function extractPreview(billData) {
+            let previewText = '';
+            for (const item of billData) {
+                if (item.type === 'text' && item.content && item.content.trim() !== '') {
+                    previewText += item.content.trim() + ' ';
+                    if (previewText.length > 50) break;
+                }
+            }
+            return previewText.trim() || 'No text content';
+        }
+
+        function renderSidebar() {
+            const sidebarList = document.getElementById('sidebar-list');
+            sidebarList.innerHTML = '';
+
+            billsHistory.forEach(record => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'history-item';
+                if (record.id === currentSelectedId) {
+                    itemDiv.classList.add('selected');
+                }
+
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'history-title';
+                titleDiv.textContent = record.timestamp;
+
+                const previewDiv = document.createElement('div');
+                previewDiv.className = 'history-preview';
+                previewDiv.textContent = record.preview;
+
+                itemDiv.appendChild(titleDiv);
+                itemDiv.appendChild(previewDiv);
+
+                itemDiv.addEventListener('click', () => {
+                    currentSelectedId = record.id;
+                    renderSidebar();
+                    renderBill(record.data);
+                });
+
+                sidebarList.appendChild(itemDiv);
+            });
+        }
+
+        socket.on('new_bill', function(data) {
+            const newRecord = {
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                timestamp: new Date().toLocaleString(),
+                preview: extractPreview(data.bill),
+                data: data
+            };
+
+            billsHistory.unshift(newRecord);
+            currentSelectedId = newRecord.id;
+
+            renderSidebar();
+            renderBill(data);
         });
     </script>
 </body>
