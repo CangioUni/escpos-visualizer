@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESC/POS Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        :root {
+            --zoom: 1.5; /* Default zoom for better visibility */
+            --paper-width: 80mm;
+        }
+
+        body { 
+            background: #2c2c2c; 
+            font-family: 'Courier New', Courier, monospace; 
+            display: flex; 
+            flex-direction: column;
+            align-items: center; 
+            padding: 20px; 
+            color: #ccc;
+        }
+
+        /* Controls Panel */
+        .controls {
+            margin-bottom: 20px;
+            background: #444;
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        /* The Paper Container */
+        #receipt-wrapper {
+            perspective: 1000px;
+        }
+
+        #receipt-container { 
+            width: calc(var(--paper-width) * var(--zoom));
+            background: white; 
+            padding: calc(5mm * var(--zoom)); 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            min-height: calc(100mm * var(--zoom));
+            color: black;
+            transition: width 0.1s ease;
+        }
+
+        .line { 
+            min-height: 1.2em; 
+            white-space: pre-wrap; 
+            word-break: break-all; 
+            font-size: calc(12px * var(--zoom));
+            line-height: 1.2;
+        }
+
+        .bold { font-weight: bold; }
+        
+        /* Scaling fonts based on zoom */
+        .size-1 { font-size: calc(12px * var(--zoom)); }
+        .size-2 { font-size: calc(24px * var(--zoom)); }
+
+        .image-container img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .cut { 
+            border-top: calc(1px * var(--zoom)) dashed #999; 
+            margin: calc(10px * var(--zoom)) 0; 
+        }
+
+        #hex-log {
+            margin-top: 30px;
+            width: 80%;
+            font-size: 10px;
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 150px;
+            overflow-y: auto;
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <label>Zoom / Display Scale:</label>
+        <input type="range" id="zoomRange" min="0.5" max="3.0" step="0.1" value="1.5">
+        <span id="zoomVal">150%</span>
+    </div>
+
+    <div id="receipt-wrapper">
+        <div id="receipt-container">
+            <div id="bill-content">Waiting for printer data...</div>
+        </div>
+    </div>
+
+    <div id="hex-log">
+        <strong>Last Raw Data (Hex):</strong>
+        <div id="hex-output">None</div>
+    </div>
+
+    <script>
+        const socket = io();
+        const zoomRange = document.getElementById('zoomRange');
+        const zoomVal = document.getElementById('zoomVal');
+        const root = document.documentElement;
+
+        // Handle Zoom Slider
+        zoomRange.addEventListener('input', (e) => {
+            const val = e.target.value;
+            root.style.setProperty('--zoom', val);
+            zoomVal.textContent = Math.round(val * 100) + '%';
+        });
+
+        socket.on('new_bill', function(data) {
+            const container = document.getElementById('bill-content');
+            container.innerHTML = '';
+            
+            data.bill.forEach(item => {
+                const div = document.createElement('div');
+                div.style.textAlign = item.align;
+
+                if (item.type === 'image') {
+                    div.className = 'image-container';
+                    const img = document.createElement('img');
+                    img.src = 'data:image/png;base64,' + item.content;
+                    div.appendChild(img);
+                } else {
+                    div.className = `line ${item.bold ? 'bold' : ''} size-${item.size}`;
+                    div.textContent = item.content || ' '; 
+                }
+                container.appendChild(div);
+            });
+
+            document.getElementById('hex-output').innerText = data.raw;
+        });
+    </script>
+</body>
+</html>
