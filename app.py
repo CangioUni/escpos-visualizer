@@ -77,7 +77,13 @@ def start_printer_server():
     while True:
         client, _ = server.accept()
         try:
-            raw_data = client.recv(1024 * 1024) 
+            raw_data = bytearray()
+            while True:
+                chunk = client.recv(4096)
+                if not chunk:
+                    break
+                raw_data.extend(chunk)
+
             if raw_data:
                 parsed_bill = parse_escpos(raw_data)
                 socketio.emit('new_bill', {'bill': parsed_bill, 'raw': raw_data.hex()})
