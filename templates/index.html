@@ -6,7 +6,10 @@
     <style>
         :root {
             --zoom: 1.5; /* Default zoom for better visibility */
+            --font-scale: 1.0; /* Font scaling independently */
             --paper-width: 80mm;
+            /* To fit exactly 48 characters, we calculate font width based on 80mm width minus 10mm total padding */
+            --char-width: calc((var(--paper-width) - 10mm) / 48);
         }
 
         body { 
@@ -94,6 +97,7 @@
             display: flex;
             gap: 15px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         /* The Paper Container */
@@ -115,15 +119,36 @@
             min-height: 1.2em; 
             white-space: pre-wrap; 
             word-break: break-all; 
-            font-size: calc(12px * var(--zoom));
+            /* To ensure exact width matching, we base font size on width.
+               In monospace fonts, width is usually ~0.6 * font-size.
+               So font-size = char-width / 0.6 */
+            font-size: calc(var(--char-width) * 1.666 * var(--zoom) * var(--font-scale));
             line-height: 1.2;
+            letter-spacing: 0;
+            transform-origin: left top;
         }
 
         .bold { font-weight: bold; }
         
-        /* Scaling fonts based on zoom */
-        .size-1 { font-size: calc(12px * var(--zoom)); }
-        .size-2 { font-size: calc(24px * var(--zoom)); }
+        /* Double Height */
+        .dh {
+            transform: scaleY(2);
+            margin-bottom: 1.2em;
+        }
+
+        /* Double Width */
+        .dw {
+            transform: scaleX(2);
+            /* Adjust width so text still wraps relative to the container */
+            width: 50%;
+        }
+
+        /* Double Height and Width */
+        .dh.dw {
+            transform: scale(2, 2);
+            width: 50%;
+            margin-bottom: 1.2em;
+        }
 
         .image-container img {
             display: block;
@@ -132,8 +157,10 @@
         }
 
         .cut { 
-            border-top: calc(1px * var(--zoom)) dashed #999; 
-            margin: calc(10px * var(--zoom)) 0; 
+            border-top: calc(2px * var(--zoom)) dashed #000;
+            margin-top: calc(10px * var(--zoom));
+            margin-bottom: 0;
+            width: 100%;
         }
 
         #hex-log {
@@ -160,10 +187,17 @@
 
     <div id="main-content">
         <div class="controls">
-        <label>Zoom / Display Scale:</label>
-        <input type="range" id="zoomRange" min="0.5" max="3.0" step="0.1" value="1.5">
-        <span id="zoomVal">150%</span>
-    </div>
+            <div>
+                <label>Zoom Scale:</label>
+                <input type="range" id="zoomRange" min="0.5" max="3.0" step="0.1" value="1.5">
+                <span id="zoomVal">150%</span>
+            </div>
+            <div>
+                <label>Font Size:</label>
+                <input type="range" id="fontRange" min="0.5" max="2.0" step="0.05" value="1.0">
+                <span id="fontVal">100%</span>
+            </div>
+        </div>
 
     <div id="receipt-wrapper">
         <div id="receipt-container">
@@ -181,6 +215,8 @@
         const socket = io();
         const zoomRange = document.getElementById('zoomRange');
         const zoomVal = document.getElementById('zoomVal');
+        const fontRange = document.getElementById('fontRange');
+        const fontVal = document.getElementById('fontVal');
         const root = document.documentElement;
 
         let billsHistory = [];
@@ -191,6 +227,13 @@
             const val = e.target.value;
             root.style.setProperty('--zoom', val);
             zoomVal.textContent = Math.round(val * 100) + '%';
+        });
+
+        // Handle Font Scale Slider
+        fontRange.addEventListener('input', (e) => {
+            const val = e.target.value;
+            root.style.setProperty('--font-scale', val);
+            fontVal.textContent = Math.round(val * 100) + '%';
         });
 
         function renderBill(data) {
@@ -206,8 +249,10 @@
                     const img = document.createElement('img');
                     img.src = 'data:image/png;base64,' + item.content;
                     div.appendChild(img);
+                } else if (item.type === 'cut') {
+                    div.className = 'cut';
                 } else {
-                    div.className = `line ${item.bold ? 'bold' : ''} size-${item.size}`;
+                    div.className = `line ${item.bold ? 'bold' : ''} ${item.dh ? 'dh' : ''} ${item.dw ? 'dw' : ''}`;
                     div.textContent = item.content || ' '; 
                 }
                 container.appendChild(div);

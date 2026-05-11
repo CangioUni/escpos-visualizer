@@ -12,7 +12,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 def parse_escpos(data):
     lines = []
-    current_line = {"type": "text", "content": "", "bold": False, "align": "left", "size": 1}
+    current_line = {"type": "text", "content": "", "bold": False, "align": "left", "dh": False, "dw": False}
     i = 0
     
     while i < len(data):
@@ -38,6 +38,23 @@ def parse_escpos(data):
                 i += data_size
             continue
 
+        # GS V (Cut)
+        elif char == 0x1D and i + 1 < len(data) and data[i+1] == 0x56:
+            if current_line["content"]:
+                lines.append(dict(current_line))
+                current_line["content"] = ""
+
+            m = data[i+2] if i + 2 < len(data) else 0
+            if m == 0 or m == 1 or m == 48 or m == 49:
+                i += 3
+            elif m == 65 or m == 66:
+                i += 4
+            else:
+                i += 2
+
+            lines.append({"type": "cut"})
+            continue
+
         # ESC commands
         elif char == 0x1B:
             i += 1
@@ -46,13 +63,19 @@ def parse_escpos(data):
                 if cmd == 0x21: # ESC ! n
                     n = data[i+1]
                     current_line["bold"] = bool(n & 8)
-                    current_line["size"] = 2 if (n & 16 or n & 32) else 1
+                    current_line["dh"] = bool(n & 16)
+                    current_line["dw"] = bool(n & 32)
                     i += 1
                 elif cmd == 0x61: # ESC a n
                     n = data[i+1]
                     align_map = {0: "left", 1: "center", 2: "right"}
                     current_line["align"] = align_map.get(n, "left")
                     i += 1
+                elif cmd == 0x69 or cmd == 0x6D: # ESC i or ESC m (Cut)
+                    if current_line["content"]:
+                        lines.append(dict(current_line))
+                        current_line["content"] = ""
+                    lines.append({"type": "cut"})
         elif char == 0x0A: # LF
             if current_line["content"]:
                 lines.append(dict(current_line))
