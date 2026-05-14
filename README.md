@@ -13,6 +13,32 @@ A lightweight web-based ESC/POS receipt visualizer for quickly testing and debug
 - Supports the main text formatting functions commonly used in receipts
 - Helpful for testing receipt layout and impagination before using a physical printer
 
+## How to Run
+
+### Local setup
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+### PM2 configuration
+
+Use the following PM2 app configuration:
+
+```javascript
+{
+  name: 'escpos-visualizer',
+  cwd: '/home/python/escpos-visualizer/',
+  script: 'app.py',
+  watch: true,
+  interpreter: '/home/python/escpos-visualizer/.venv/bin/python',
+  interpreter_args: '-u'
+}
+```
+
 ## Limitations
 
 - The rendered output is **not guaranteed** to match a real physical printer 1:1
