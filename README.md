@@ -24,6 +24,10 @@ pip install -r requirements.txt
 python app.py
 ```
 
+After starting the app, open web application at http://127.0.0.1:5050.
+
+The printer socket is available on `0.0.0.0:9100` at port `9100`.
+
 ### PM2 configuration
 
 Use the following PM2 app configuration:
