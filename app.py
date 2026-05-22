@@ -17,7 +17,12 @@ def parse_escpos(data):
     
     while i < len(data):
         char = data[i]
-        
+
+        # DLE EOT (Real-time status request) - responded to by socket handler, skip here
+        if char == 0x10 and i + 2 < len(data) and data[i+1] == 0x04:
+            i += 3
+            continue
+
         # GS v 0 (Raster bit image)
         if char == 0x1D and i + 7 < len(data) and data[i+1] == 0x76 and data[i+2] == 0x30:
             width_bytes = data[i+4] + (data[i+5] * 256)
@@ -89,6 +94,10 @@ def parse_escpos(data):
         lines.append(current_line)
     return lines
 
+# Response byte for all real-time status requests (DLE EOT n):
+# 0x12 = paper present, printer online, no errors ("paper ok")
+_PAPER_OK_STATUS = bytes([0x12])
+
 def start_printer_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -101,11 +110,37 @@ def start_printer_server():
         client, _ = server.accept()
         try:
             raw_data = bytearray()
+            pending = bytearray()  # buffer for partial DLE EOT sequences spanning chunks
             while True:
                 chunk = client.recv(4096)
                 if not chunk:
                     break
-                raw_data.extend(chunk)
+
+                buf = pending + bytearray(chunk)
+                pending = bytearray()
+                i = 0
+
+                while i < len(buf):
+                    if buf[i] == 0x10:  # DLE — potential real-time status request
+                        if i + 1 >= len(buf):
+                            pending.extend(buf[i:])
+                            break
+                        if buf[i + 1] == 0x04:  # EOT
+                            if i + 2 >= len(buf):
+                                pending.extend(buf[i:])
+                                break
+                            # Respond with "paper ok" status regardless of n (1-4)
+                            client.send(_PAPER_OK_STATUS)
+                            i += 3  # skip DLE EOT n
+                        else:
+                            raw_data.append(buf[i])
+                            i += 1
+                    else:
+                        raw_data.append(buf[i])
+                        i += 1
+
+            # Any incomplete DLE sequence at EOF is treated as regular data
+            raw_data.extend(pending)
 
             if raw_data:
                 parsed_bill = parse_escpos(raw_data)
